@@ -5,6 +5,7 @@ import fitz
 INPUT_FOLDER = "input_files"
 SAMPLE_SIZE = 10
 IMAGE_AREA_THRESHOLD = 0.7
+TEXT_CHAR_THRESHOLD = 30
 
 def is_page_image_dominated(page, threshold):
     rect = page.rect
@@ -17,6 +18,10 @@ def is_page_image_dominated(page, threshold):
                 return True
     return False
 
+def page_has_text(page, char_threshold):
+    txt = page.get_text()
+    return len(txt.strip()) > char_threshold
+
 def evaluate_pdf(path):
     doc = fitz.open(path)
     n = doc.page_count
@@ -25,9 +30,26 @@ def evaluate_pdf(path):
     else:
         start, end = n // 4, n * 3 // 4
         pages = random.sample(range(start, end), SAMPLE_SIZE)
-    image_pages = sum(is_page_image_dominated(doc[p], IMAGE_AREA_THRESHOLD) for p in pages)
-    verdict = "scanned style" if image_pages > SAMPLE_SIZE // 2 else "text‑based"
-    print(f"{os.path.basename(path)}: {verdict} ({image_pages}/{len(pages)} sampled pages image‑dominated)")
+    image_pages = 0
+    text_pages = 0
+    for pno in pages:
+        page = doc[pno]
+        if is_page_image_dominated(page, IMAGE_AREA_THRESHOLD):
+            image_pages += 1
+        if page_has_text(page, TEXT_CHAR_THRESHOLD):
+            text_pages += 1
+    marker = ""
+    if image_pages <= SAMPLE_SIZE // 2:
+        verdict = "text‑based"
+    else:
+        if text_pages < 2:
+            verdict = "image‑only"
+            marker = "*"
+        else:
+            verdict = "image‑with‑text"
+    print(f"{marker}{os.path.basename(path)[:20]}: {verdict} "
+          f"({image_pages}/{len(pages)} image‑dominated, "
+          f"{text_pages}/{len(pages)} with text)")
 
 def main():
     for fn in os.listdir(INPUT_FOLDER):
